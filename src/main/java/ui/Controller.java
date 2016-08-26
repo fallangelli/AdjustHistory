@@ -6,6 +6,7 @@ import javafx.fxml.FXML;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
+import service.AdjustService;
 import service.BackupService;
 import utils.TransLogger;
 
@@ -101,13 +102,39 @@ public class Controller {
     } catch (Exception e) {
       logger.severe(e.getMessage());
     }
-
   }
 
 
   @FXML
   void btnAdjustFired(ActionEvent event) {
+    try {
+      vBoxItems.getChildren().clear();
+      AdjustService service = new AdjustService();
 
+      final Label label = new Label();
+      label.setPrefWidth(600);
+      label.setWrapText(true);
+      label.textProperty().bind(service.titleProperty());
+
+      final ProgressBar pb = new ProgressBar();
+      pb.setPrefWidth(300);
+      pb.setProgress(0);
+
+      pb.progressProperty().bind(service.progressProperty());
+
+      final VBox vb = new VBox();
+      vb.setSpacing(15);
+      vb.setAlignment(Pos.CENTER_LEFT);
+      vb.getChildren().addAll(label, pb);
+
+      bindButtonState(service);
+      service.start();
+
+      vBoxItems.getChildren().addAll(vb);
+
+    } catch (Exception e) {
+      logger.severe(e.getMessage());
+    }
   }
 
   private void bindButtonState(Service<Integer> service) {
