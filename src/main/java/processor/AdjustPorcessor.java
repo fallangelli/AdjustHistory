@@ -34,10 +34,10 @@ public class AdjustPorcessor {
       return true;
 
     loadToAdjustTableNames(SYSTEM_TYPE.EC);
-    loadToAdjustTableNames(SYSTEM_TYPE.PC);
-
     adjustFeelogTables(SYSTEM_TYPE.EC);
     adjustTransTables(SYSTEM_TYPE.EC);
+
+    loadToAdjustTableNames(SYSTEM_TYPE.PC);
     adjustFeelogTables(SYSTEM_TYPE.PC);
     adjustTransTables(SYSTEM_TYPE.PC);
 
