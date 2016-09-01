@@ -19,7 +19,8 @@ import java.util.logging.Logger;
  * Created by Administrator on 2016/3/21.
  */
 public class AdjustPorcessor {
-  private static final String INDEX_FORMAT = "0000000";
+  private static final String INDEX_FORMAT = "00000";
+  private static final String TAB_INDEX_FORMAT = "000";
   public static List<String> TO_ADJUST_PC_FEELOG_TABLE_NAMES = new ArrayList<String>();
   public static Map<String, Pair<String, String>> TO_ADJUST_PC_TRANS_TABLES = new HashMap();
   public static List<String> TO_ADJUST_EC_FEELOG_TABLE_NAMES = new ArrayList<String>();
@@ -34,12 +35,22 @@ public class AdjustPorcessor {
       return true;
 
     loadToAdjustTableNames(SYSTEM_TYPE.EC);
-    adjustFeelogTables(SYSTEM_TYPE.EC);
-    adjustTransTables(SYSTEM_TYPE.EC);
-
     loadToAdjustTableNames(SYSTEM_TYPE.PC);
-    adjustFeelogTables(SYSTEM_TYPE.PC);
-    adjustTransTables(SYSTEM_TYPE.PC);
+
+    if (JdbcUtils.ADJUST_TYPE == 0) {
+      adjustFeelogTables(SYSTEM_TYPE.EC);
+      adjustFeelogTables(SYSTEM_TYPE.PC);
+    }
+    if (JdbcUtils.ADJUST_TYPE == 0 || JdbcUtils.ADJUST_TYPE == 1) {
+      adjustTransTables(SYSTEM_TYPE.EC);
+      adjustTransTables(SYSTEM_TYPE.PC);
+    }
+    if (JdbcUtils.ADJUST_TYPE == 0 || JdbcUtils.ADJUST_TYPE == 1
+      || JdbcUtils.ADJUST_TYPE == 2) {
+      adjustVouchers(SYSTEM_TYPE.EC);
+      adjustVouchers(SYSTEM_TYPE.PC);
+    }
+
 
     return true;
   }
@@ -57,6 +68,8 @@ public class AdjustPorcessor {
     if (toAdjustTableNames.size() <= 0)
       return true;
 
+    logger.info("待修正列表 " + toAdjustTableNames);
+
     Connection conn = null;
     Statement statement = null;
     ResultSet result = null;
@@ -73,16 +86,21 @@ public class AdjustPorcessor {
     }
 
     for (String tableName : toAdjustTableNames) {
+
       try {
         sql = "update " + tableName + " set HEADQUARTER_ORGCODE = BRANCH_ORGCODE," +
           "HEADQUARTER_ORGNAME = BRANCH_ORGNAME, LEVEL1NAME=LEVEL2NAME " +
           "where HEADQUARTER_ORGCODE<>BRANCH_ORGCODE and HEADQUARTER_ORGCODE " +
           "in (" + headerCodes + " )";
         statement.setQueryTimeout(43200);
-        result = statement.executeQuery(sql);
+        statement.executeQuery(sql);
+        conn.commit();
+        logger.info("已修正表 " + tableName);
       } catch (SQLException e) {
-        logger.warning(sql);
-        logger.severe(e.getMessage());
+        if (e.getErrorCode() != 942) {
+          logger.warning(sql);
+          logger.severe(e.getMessage());
+        }
         continue;
       } catch (Exception e) {
         logger.warning(sql);
@@ -112,23 +130,95 @@ public class AdjustPorcessor {
     if (toAdjustTableNames.length <= 0)
       return true;
 
+    String info = "";
+    for (Object item : toAdjustTableNames) {
+      info += item.toString() + ",";
+    }
+    logger.info("待修正列表 " + info);
+
+    Connection conn = null;
+    Statement statement = null;
+    ResultSet result = null;
+    String sql = "";
+
+    try {
+      conn = JdbcUtils.getOracleConnection();
+      statement = conn.createStatement();
+
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      return false;
+    } catch (SQLException e) {
+      e.printStackTrace();
+    }
+
+    for (Object objTableName : toAdjustTableNames) {
+      String tableName = objTableName.toString();
+      try {
+        sql = "update " + tableName + " set HEADQUARTER_ORGCODE = BRANCH_ORGCODE," +
+          "HEADQUARTER_ORGNAME = BRANCH_ORGNAME, LEVEL1NAME=LEVEL2NAME " +
+          "where HEADQUARTER_ORGCODE<>BRANCH_ORGCODE and HEADQUARTER_ORGCODE " +
+          "in (" + headerCodes + " )";
+        statement.setQueryTimeout(43200);
+        statement.executeQuery(sql);
+        conn.commit();
+        logger.info("已修正表 " + tableName);
+      } catch (SQLException e) {
+        if (e.getErrorCode() != 942) {
+          logger.warning(sql);
+          logger.severe(e.getMessage());
+        }
+        continue;
+      } catch (Exception e) {
+        logger.warning(sql);
+        logger.severe(e.getMessage());
+        continue;
+      }
+    }
+    try {
+      JdbcUtils.releaseStatement(statement, result);
+      JdbcUtils.releaseConn(conn);
+    } catch (Exception e) {
+      logger.severe(e.getMessage());
+    }
+    return true;
+  }
+
+  private static boolean adjustVouchers(SYSTEM_TYPE systemType) {
+    Object[] toAdjustTableNames = new Object[0];
+    String headerCodes = "";
+    if (systemType == SYSTEM_TYPE.EC) {
+      toAdjustTableNames = TO_ADJUST_EC_TRANS_TABLES.keySet().toArray();
+      headerCodes = JdbcUtils.EC_HEAD_CODES;
+    } else if (systemType == SYSTEM_TYPE.PC) {
+      toAdjustTableNames = TO_ADJUST_PC_TRANS_TABLES.keySet().toArray();
+      headerCodes = JdbcUtils.PC_HEAD_CODES;
+    }
+    if (toAdjustTableNames.length <= 0)
+      return true;
+
+    String info = "";
+    for (Object item : toAdjustTableNames) {
+      info += item.toString() + ",";
+    }
+    logger.info("待修正列表 " + info);
+
     Connection conn = null;
     Statement statSelect = null;
     Statement statVoucherNo = null;
     Statement statUpdateVoucher = null;
-    Statement statUpdateTrans = null;
     Statement statValidVoucher = null;
     Statement statDeleteVoucher = null;
     ResultSet resultSelect = null;
     ResultSet resultVoucherNo = null;
     String sql = "";
-    DecimalFormat df = new DecimalFormat(INDEX_FORMAT);
+    DecimalFormat dfIndex = new DecimalFormat(INDEX_FORMAT);
+    DecimalFormat dfTabIndex = new DecimalFormat(TAB_INDEX_FORMAT);
     try {
       conn = JdbcUtils.getOracleConnection();
       statSelect = conn.createStatement();
       statVoucherNo = conn.createStatement();
       statUpdateVoucher = conn.createStatement();
-      statUpdateTrans = conn.createStatement();
       statValidVoucher = conn.createStatement();
       statDeleteVoucher = conn.createStatement();
     } catch (InterruptedException e) {
@@ -139,7 +229,9 @@ public class AdjustPorcessor {
     }
 
     Integer index = 0;
+    Integer tabIndex = 0;
     for (Object tableName : toAdjustTableNames) {
+      String strTabIndex = dfTabIndex.format(++tabIndex);
       Pair<String, String> item = new Pair<>("", "");
       if (systemType == SYSTEM_TYPE.EC) {
         item = TO_ADJUST_EC_TRANS_TABLES.get(tableName);
@@ -152,53 +244,52 @@ public class AdjustPorcessor {
 
       try {
         sql = "SELECT headquarter_orgcode, BRANCH_ORGCODE,BRANCH_ORGNAME, COUNT (*) cou " +
-          "    FROM " + tableName +
+          "    FROM adjust_" + tableName +
           "   WHERE     headquarter_orgcode IN (" + headerCodes + ") " +
           "         AND headquarter_orgcode <> BRANCH_ORGCODE " +
           "GROUP BY headquarter_orgcode, BRANCH_ORGCODE, BRANCH_ORGNAME";
         resultSelect = statSelect.executeQuery(sql);
         String baseHeadCode = "";
         while (resultSelect.next()) {
-          String headerCode = baseHeadCode = resultSelect.getString("headquarter_orgcode");
-          String branchCode = resultSelect.getString("BRANCH_ORGCODE");
-          String branchName = resultSelect.getString("BRANCH_ORGNAME");
-          Integer count = resultSelect.getInt("cou");
-          sql = "select substr(voucher_no,1,12)||'9' VOUCHER_NO from vouchers " +
-            " where HEADQUARTER_ORGCODE = '" + headerCode + "' " +
-            " and voucher_year='" + year + "' " +
-            " and voucher_month='" + month + "'";
-          resultVoucherNo = statVoucherNo.executeQuery(sql);
-          resultVoucherNo.next();
+          try {
+            String headerCode = baseHeadCode = resultSelect.getString("headquarter_orgcode");
+            String branchCode = resultSelect.getString("BRANCH_ORGCODE");
+            String branchName = resultSelect.getString("BRANCH_ORGNAME");
+            Integer count = resultSelect.getInt("cou");
+            sql = "select substr(voucher_no,1,12)||'" + strTabIndex + "' VOUCHER_NO from vouchers " +
+              " where HEADQUARTER_ORGCODE = '" + headerCode + "' " +
+              " and voucher_year='" + year + "' " +
+              " and voucher_month='" + month + "'";
+            resultVoucherNo = statVoucherNo.executeQuery(sql);
+            resultVoucherNo.next();
 
-          String strIndex = df.format(++index);
-          String voucherNo = resultVoucherNo.getString(1) + strIndex;
+            String strIndex = dfIndex.format(++index);
+            String voucherNo = resultVoucherNo.getString(1) + strIndex;
 
-          sql = "insert into vouchers select '" + voucherNo +
-            "', VOUCHER_TIME , '" + branchCode + "', '" + branchName + "' , SYSTEM_CODE ," +
-            " PRODUCT_CODE  , PRODUCT_NAME  , PRODUCT_PRICE_ORIGINAL, PRODUCT_PRICE_DISCOUNTED," +
-            count + "*PRODUCT_PRICE_ORIGINAL," +
-            count + "*PRODUCT_PRICE_DISCOUNTED," +
-            count + ", " + count + ", " +
-            " DISCOUNT ,DISCOUNT_MEMO ,VOUCHER_YEAR,VOUCHER_MONTH,BILL_NO  ," +
-            " COEF_CONTRIBUTE  ,COEF_QUERYAMOUNT ,1   ,STATUS from vouchers " +
-            " where HEADQUARTER_ORGCODE = '" + headerCode + "' " +
-            " and voucher_year='" + year + "' " +
-            " and voucher_month='" + month + "'";
-          statUpdateTrans.executeQuery(sql);
+            sql = "insert into vouchers select '" + voucherNo +
+              "', VOUCHER_TIME , '" + branchCode + "', '" + branchName + "' , SYSTEM_CODE ," +
+              " PRODUCT_CODE  , PRODUCT_NAME  , PRODUCT_PRICE_ORIGINAL, PRODUCT_PRICE_DISCOUNTED," +
+              count + "*PRODUCT_PRICE_ORIGINAL," +
+              count + "*PRODUCT_PRICE_DISCOUNTED," +
+              count + ", " + count + ", " +
+              " DISCOUNT ,DISCOUNT_MEMO ,VOUCHER_YEAR,VOUCHER_MONTH,BILL_NO  ," +
+              " COEF_CONTRIBUTE  ,COEF_QUERYAMOUNT ,1   ,STATUS from vouchers " +
+              " where HEADQUARTER_ORGCODE = '" + headerCode + "' " +
+              " and voucher_year='" + year + "' " +
+              " and voucher_month='" + month + "'";
+            statUpdateVoucher.executeQuery(sql);
 
-          sql = "update " + tableName + " set HEADQUARTER_ORGCODE = BRANCH_ORGCODE," +
-            "HEADQUARTER_ORGNAME = BRANCH_ORGNAME, LEVEL1NAME=LEVEL2NAME," +
-            "VOUCHER_NO= '" + voucherNo +
-            "' where HEADQUARTER_ORGCODE = '" + headerCode + "' " +
-            " and BRANCH_ORGCODE = '" + branchCode + "' ";
-          statUpdateVoucher.executeQuery(sql);
+            sql = "update  vouchers set VALID_FLAG = '0' " +
+              " where HEADQUARTER_ORGCODE = '" + baseHeadCode + "' " +
+              " and voucher_year='" + year + "' " +
+              " and voucher_month='" + month + "'";
 
-          sql = "update  vouchers set VALID_FLAG = '0' " +
-            " where HEADQUARTER_ORGCODE = '" + baseHeadCode + "' " +
-            " and voucher_year='" + year + "' " +
-            " and voucher_month='" + month + "'";
-
-          statValidVoucher.executeQuery(sql);
+            statValidVoucher.executeQuery(sql);
+          } catch (SQLException e) {
+            logger.warning(sql);
+            logger.severe(e.getMessage());
+            continue;
+          }
         }
         sql = "delete  vouchers " +
           "   WHERE     headquarter_orgcode IN (" + headerCodes + ") " +
@@ -207,10 +298,12 @@ public class AdjustPorcessor {
           " and  VALID_FLAG = '0'";
 
         statDeleteVoucher.executeQuery(sql);
-
+        logger.info("已修正voucher " + tableName);
       } catch (SQLException e) {
-        logger.warning(sql);
-        logger.severe(e.getMessage());
+        if (e.getErrorCode() != 942) {
+          logger.warning(sql);
+          logger.severe(e.getMessage());
+        }
         continue;
       } catch (Exception e) {
         logger.warning(sql);
@@ -222,7 +315,6 @@ public class AdjustPorcessor {
     try {
       JdbcUtils.releaseStatement(statSelect, resultSelect);
       JdbcUtils.releaseStatement(statVoucherNo, resultVoucherNo);
-      JdbcUtils.releaseStatement(statUpdateTrans);
       JdbcUtils.releaseStatement(statUpdateVoucher);
       JdbcUtils.releaseStatement(statValidVoucher);
       JdbcUtils.releaseStatement(statDeleteVoucher);
@@ -250,7 +342,7 @@ public class AdjustPorcessor {
         headerCodes = JdbcUtils.PC_HEAD_CODES;
 
       sql = "SELECT system_code||'_'||voucher_year||LPAD (voucher_month , 2 , '0') ym,voucher_year,voucher_month " +
-        " FROM VOUCHERS where HEADQUARTER_ORGCODE in (" + headerCodes
+        " FROM VOUCHERS where valid_flag=1 and HEADQUARTER_ORGCODE in (" + headerCodes
         + ") group by voucher_year, voucher_month,system_code ";
       statement = conn.createStatement();
       statement.setQueryTimeout(43200);

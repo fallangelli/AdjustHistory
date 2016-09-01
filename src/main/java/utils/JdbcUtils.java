@@ -10,6 +10,7 @@ import java.util.logging.Logger;
 
 public class JdbcUtils {
   public static String EC_HEAD_CODES = null;
+  public static Integer ADJUST_TYPE = null;
   public static String PC_HEAD_CODES = null;
   private static Logger logger = TransLogger.getLogger(JdbcUtils.class);
 
@@ -26,6 +27,7 @@ public class JdbcUtils {
 
       EC_HEAD_CODES = prop.getProperty("ec_head_codes");
       PC_HEAD_CODES = prop.getProperty("pc_head_codes");
+      ADJUST_TYPE = Integer.parseInt(prop.getProperty("adjust_type"));
     } catch (Exception e) {
       e.printStackTrace();
       logger.severe(e.getMessage());

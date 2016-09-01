@@ -15,13 +15,8 @@ import java.util.logging.Logger;
  * Created by Administrator on 2016/3/21.
  */
 public class BackupPorcessor {
-  private static Logger logger = TransLogger.getLogger(BackupPorcessor.class);
   public static List<String> TO_BACKUP_TABLE_NAMES = new ArrayList<String>();
-
-  public enum SYSTEM_TYPE {
-    EC, PC
-  }
-
+  private static Logger logger = TransLogger.getLogger(BackupPorcessor.class);
 
   public static boolean doBackup() {
     if (JdbcUtils.EC_HEAD_CODES == null || JdbcUtils.EC_HEAD_CODES.length() <= 0)
@@ -38,7 +33,6 @@ public class BackupPorcessor {
 
     return true;
   }
-
 
   private static boolean loadToBackupTableNames(SYSTEM_TYPE type) {
     Connection conn = null;
@@ -57,7 +51,7 @@ public class BackupPorcessor {
         headerCodes = JdbcUtils.PC_HEAD_CODES;
 
       sql = "SELECT system_code||'_'||voucher_year||LPAD (voucher_month , 2 , '0') ym " +
-        " FROM VOUCHERS where HEADQUARTER_ORGCODE in (" + headerCodes
+        " FROM VOUCHERS where valid_flag=1 and HEADQUARTER_ORGCODE in (" + headerCodes
         + ") group by voucher_year, voucher_month,system_code ";
       statement = conn.createStatement();
       statement.setQueryTimeout(43200);
@@ -86,7 +80,6 @@ public class BackupPorcessor {
     }
     return false;
   }
-
 
   private static boolean backupTables() {
     if (TO_BACKUP_TABLE_NAMES.size() <= 0)
@@ -123,5 +116,10 @@ public class BackupPorcessor {
       }
     }
     return true;
+  }
+
+
+  public enum SYSTEM_TYPE {
+    EC, PC
   }
 }
